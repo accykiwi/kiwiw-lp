@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "api/proxy-lp.js": {
-      "runtime": "nodejs18.x"
-    }
-  }
-}
