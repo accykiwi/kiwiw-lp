@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LP Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { background: #111; color: white; font-family: Arial, sans-serif; padding: 20px; }
+    .token { background: #222; margin: 10px 0; padding: 10px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+
+<h1>Raydium LP Positions</h1>
+<div id="lpSection">Loading LP data...</div>
+
+<script>
+const WALLET_ADDRESS = "2eb81eBXidrgW6sSzTDnHTEQpqJpmkANMCSRS1BKjUku";
+
+async function fetchLPPositions() {
+  const res = await fetch('/api/proxy-lp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wallet: WALLET_ADDRESS })
+  });
+  const data = await res.json();
+  return data.positions || [];
+}
+
+async function updateLPs() {
+  const lpSection = document.getElementById('lpSection');
+  lpSection.innerHTML = '<h2>LP Positions</h2>';
+  const positions = await fetchLPPositions();
+  if (!positions.length) {
+    lpSection.innerHTML += '<p>No LP positions found.</p>';
+    return;
+  }
+  positions.forEach(pos => {
+    const div = document.createElement('div');
+    div.className = 'token';
+    div.innerHTML = `
+      <strong>${pos.pool}</strong><br>
+      Tokens: ${pos.amountA} ${pos.tokenA} / ${pos.amountB} ${pos.tokenB}<br>
+      Value: $${pos.value} | APR: ${pos.apr}%<br>
+      Status: ${pos.range}<br>
+      Pending Fees: ${JSON.stringify(pos.pendingFees)}
+    `;
+    lpSection.appendChild(div);
+  });
+}
+
+updateLPs();
+setInterval(updateLPs, 60000);
+</script>
+
+</body>
+</html>
