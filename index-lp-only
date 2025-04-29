@@ -1,57 +1,50 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>LP Tracker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { background: #111; color: white; font-family: Arial, sans-serif; padding: 20px; }
-    .token { background: #222; margin: 10px 0; padding: 10px; border-radius: 8px; }
-  </style>
-</head>
-<body>
+// /api/proxy-lp.js
 
-<h1>Raydium LP Positions</h1>
-<div id="lpSection">Loading LP data...</div>
+export const config = {
+  runtime: 'nodejs'
+};
 
-<script>
-const WALLET_ADDRESS = "2eb81eBXidrgW6sSzTDnHTEQpqJpmkANMCSRS1BKjUku";
+import https from 'https';
 
-async function fetchLPPositions() {
-  const res = await fetch('/api/proxy-lp', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ wallet: WALLET_ADDRESS })
-  });
-  const data = await res.json();
-  return data.positions || [];
-}
-
-async function updateLPs() {
-  const lpSection = document.getElementById('lpSection');
-  lpSection.innerHTML = '<h2>LP Positions</h2>';
-  const positions = await fetchLPPositions();
-  if (!positions.length) {
-    lpSection.innerHTML += '<p>No LP positions found.</p>';
-    return;
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Only POST allowed' });
   }
-  positions.forEach(pos => {
-    const div = document.createElement('div');
-    div.className = 'token';
-    div.innerHTML = `
-      <strong>${pos.pool}</strong><br>
-      Tokens: ${pos.amountA} ${pos.tokenA} / ${pos.amountB} ${pos.tokenB}<br>
-      Value: $${pos.value} | APR: ${pos.apr}%<br>
-      Status: ${pos.range}<br>
-      Pending Fees: ${JSON.stringify(pos.pendingFees)}
-    `;
-    lpSection.appendChild(div);
+
+  const bodyChunks = [];
+  for await (const chunk of req) bodyChunks.push(chunk);
+  const rawBody = Buffer.concat(bodyChunks).toString();
+
+  const options = {
+    hostname: 'api.raydium.io',
+    path: '/v2/clmm/user-position',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (compatible; KiwiBot/1.0)',
+      'Accept': 'application/json',
+      'Content-Length': Buffer.byteLength(rawBody),
+    }
+  };
+
+  const rayReq = https.request(options, (rayRes) => {
+    let data = '';
+
+    rayRes.on('data', (chunk) => data += chunk);
+    rayRes.on('end', () => {
+      try {
+        const parsed = JSON.parse(data);
+        res.status(200).json(parsed);
+      } catch (e) {
+        res.status(500).json({ error: 'Invalid JSON from Raydium', data });
+      }
+    });
   });
+
+  rayReq.on('error', (err) => {
+    res.status(500).json({ error: 'Raydium request failed', details: err.message });
+  });
+
+  rayReq.write(rawBody);
+  rayReq.end();
 }
-
-updateLPs();
-setInterval(updateLPs, 60000);
-</script>
-
-</body>
-</html>
